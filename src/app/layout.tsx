@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "AWS Vision Demo",
-  description: "YOLO26 object detection served from an Amazon SageMaker endpoint",
+  description: "Computer vision on AWS: Amazon SageMaker serverless inference with a custom container from Amazon ECR",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

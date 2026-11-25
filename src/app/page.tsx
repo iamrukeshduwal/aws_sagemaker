@@ -21,7 +21,8 @@ export default function HomePage() {
       <header className="header">
         <h1>AWS Vision Demo</h1>
         <p className="muted">
-          Object detection with YOLO26 on an Amazon SageMaker endpoint. Try a photo, your webcam, or a video.
+          Computer vision on AWS: your image goes through a secure API to an Amazon SageMaker serverless endpoint,
+          running a custom container from Amazon ECR. Try a photo, your webcam, or a video.
         </p>
       </header>
 

@@ -53,7 +53,8 @@ function toPublicError(err: unknown): PublicError {
   console.error("[sagemaker]", err);
 
   if (err instanceof SageMakerRuntimeServiceException) {
-    if (err.name === "ValidationException" && /could not find endpoint/i.test(err.message)) {
+    // AWS words this two ways: "Could not find endpoint ..." / "Endpoint ... not found"
+    if (/^Validation(Exception|Error)$/.test(err.name) && /could not find endpoint|endpoint .* not found/i.test(err.message)) {
       return new PublicError("The demo model is offline right now. Please try again later.", 503);
     }
     if (err.name === "ModelError") {
