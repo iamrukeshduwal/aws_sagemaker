@@ -1,69 +1,116 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+"use client";
 
-export default function Home() {
+// Home page: upload -> resize -> POST /api/detect -> draw boxes + table.
+import { useMemo, useState } from "react";
+import ImageUploader from "@/components/ImageUploader";
+import DetectionCanvas from "@/components/DetectionCanvas";
+import ResultsTable from "@/components/ResultsTable";
+import { prepareImage, type PreparedImage } from "@/lib/prepareImage";
+import { detectObjects } from "@/lib/api";
+import type { PredictionResponse } from "@/types/detection";
+
+type Status = "idle" | "loading" | "done" | "error";
+
+export default function HomePage() {
+  const [status, setStatus] = useState<Status>("idle");
+  const [image, setImage] = useState<PreparedImage | null>(null);
+  const [result, setResult] = useState<PredictionResponse | null>(null);
+  const [error, setError] = useState("");
+  const [roundTripMs, setRoundTripMs] = useState(0);
+  const [minConfidence, setMinConfidence] = useState(0.25);
+
+  // Filter in the browser so the slider updates instantly (no new request)
+  const visible = useMemo(
+    () => result?.detections.filter((d) => d.confidence >= minConfidence) ?? [],
+    [result, minConfidence],
+  );
+
+  async function handleSelect(file: File) {
+    setStatus("loading");
+    setError("");
+    setResult(null);
+    try {
+      const prepared = await prepareImage(file);
+      setImage(prepared);
+
+      const start = performance.now();
+      const prediction = await detectObjects({
+        image: prepared.base64,
+        width: prepared.width,
+        height: prepared.height,
+      });
+      setRoundTripMs(Math.round(performance.now() - start));
+      setResult(prediction);
+      setStatus("done");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setStatus("error");
+    }
+  }
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>
-            To get started, edit the{" "}
-            <code className={styles.code}>page.tsx</code> file.
-          </h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+    <main className="container">
+      <header className="header">
+        <h1>AWS Vision Demo</h1>
+        <p className="muted">
+          Object detection with YOLO26 on an Amazon SageMaker endpoint. Upload an image to see what the model finds.
+        </p>
+      </header>
+
+      <ImageUploader onSelect={handleSelect} disabled={status === "loading"} />
+
+      {status === "loading" && <p className="status">Detecting objects…</p>}
+      {status === "error" && <p className="status status--error">{error}</p>}
+
+      {image && (
+        <section className="results">
+          <div className="results__image">
+            <DetectionCanvas
+              imageUrl={image.dataUrl}
+              width={image.width}
+              height={image.height}
+              detections={status === "done" ? visible : []}
             />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+          </div>
+
+          {status === "done" && result && (
+            <div className="results__panel">
+              <div className="stats">
+                <div>
+                  <span className="stats__value">{visible.length}</span>
+                  <span className="stats__label">objects</span>
+                </div>
+                <div>
+                  <span className="stats__value">{result.inference_ms} ms</span>
+                  <span className="stats__label">model time</span>
+                </div>
+                <div>
+                  <span className="stats__value">{roundTripMs} ms</span>
+                  <span className="stats__label">round trip</span>
+                </div>
+              </div>
+
+              <label className="slider">
+                Confidence ≥ {(minConfidence * 100).toFixed(0)}%
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={minConfidence}
+                  onChange={(e) => setMinConfidence(Number(e.target.value))}
+                />
+              </label>
+
+              <ResultsTable detections={visible} />
+            </div>
+          )}
+        </section>
+      )}
+
+      <footer className="footer muted">
+        Next.js · TypeScript · Amazon SageMaker · images are processed in memory and not stored
+      </footer>
+    </main>
   );
 }
