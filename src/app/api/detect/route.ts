@@ -1,11 +1,16 @@
-// POST /api/detect: runs on the SERVER (your laptop now, Vercel later).
-// STEP 2: returns fake (mock) detections so we can build the UI without AWS.
-// STEP 3: we replace mockDetect() with a real call to the SageMaker endpoint.
-import type { DetectRequest, PredictionResponse } from "@/types/detection";
+// POST /api/detect: runs on the SERVER (your laptop in dev, Vercel in production).
+// Browser sends { image: base64 JPEG, width, height } -> we call SageMaker -> return detections.
+import type { DetectRequest } from "@/types/detection";
+import { invokeYolo, PublicError } from "@/lib/server/sagemaker";
+import { mockDetect } from "@/lib/server/mock";
+
+export const maxDuration = 30; // seconds; Vercel stops the function after this
 
 const MAX_BASE64_LENGTH = 4_000_000; // ~3 MB image; Vercel's request limit is 4.5 MB
+const USE_MOCK = process.env.USE_MOCK === "true";
 
 export async function POST(request: Request) {
+  // 1. Validate input
   let body: Partial<DetectRequest>;
   try {
     body = await request.json();
@@ -24,19 +29,18 @@ export async function POST(request: Request) {
     return Response.json({ error: "Missing 'width'/'height'." }, { status: 400 });
   }
 
-  const result = await mockDetect(width, height);
-  return Response.json(result);
-}
+  // 2. Mock mode: no AWS needed (handy when the endpoint is deleted)
+  if (USE_MOCK) {
+    return Response.json(await mockDetect(width, height));
+  }
 
-async function mockDetect(width: number, height: number): Promise<PredictionResponse> {
-  await new Promise((resolve) => setTimeout(resolve, 700)); // pretend the model is thinking
-  return {
-    image_size: [width, height],
-    inference_ms: 0,
-    detections: [
-      { class: "mock-person", class_id: 0, confidence: 0.91, box_xyxy: [width * 0.1, height * 0.2, width * 0.4, height * 0.9] },
-      { class: "mock-bus", class_id: 5, confidence: 0.76, box_xyxy: [width * 0.35, height * 0.1, width * 0.95, height * 0.7] },
-      { class: "mock-person", class_id: 0, confidence: 0.42, box_xyxy: [width * 0.6, height * 0.4, width * 0.8, height * 0.95] },
-    ],
-  };
+  // 3. Real mode: base64 -> bytes -> SageMaker endpoint -> JSON
+  try {
+    const bytes = new Uint8Array(Buffer.from(image, "base64"));
+    const result = await invokeYolo(bytes);
+    return Response.json(result);
+  } catch (err) {
+    const e = err instanceof PublicError ? err : new PublicError("Unexpected server error.", 500);
+    return Response.json({ error: e.message }, { status: e.status });
+  }
 }
