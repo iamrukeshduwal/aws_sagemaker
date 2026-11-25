@@ -4,7 +4,7 @@ import type { DetectRequest } from "@/types/detection";
 import { invokeYolo, PublicError } from "@/lib/server/sagemaker";
 import { mockDetect } from "@/lib/server/mock";
 
-export const maxDuration = 30; // seconds; Vercel stops the function after this
+export const maxDuration = 60; // seconds; serverless cold starts can take a while (Vercel Hobby max: 60)
 
 const MAX_BASE64_LENGTH = 4_000_000; // ~3 MB image; Vercel's request limit is 4.5 MB
 const USE_MOCK = process.env.USE_MOCK === "true";

@@ -167,6 +167,9 @@ export default function VideoDetector({ source }: Props) {
         Detection auto-stops after {MAX_RUN_MIN} minutes.
       </p>
 
+      {det.running && det.framesSent === 0 && (
+        <p className="status">Waking up the model… the first frame can take up to ~30 s (serverless cold start).</p>
+      )}
       {mediaError && <p className="status status--error">{mediaError}</p>}
       {det.error && <p className="status status--error">{det.error}</p>}
 

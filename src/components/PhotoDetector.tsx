@@ -20,6 +20,7 @@ export default function PhotoDetector() {
   const [error, setError] = useState("");
   const [roundTripMs, setRoundTripMs] = useState(0);
   const [minConfidence, setMinConfidence] = useState(0.25);
+  const [slow, setSlow] = useState(false); // request taking long = serverless cold start
 
   // Filter in the browser so the slider updates instantly (no new request)
   const visible = useMemo(
@@ -31,6 +32,7 @@ export default function PhotoDetector() {
     setStatus("loading");
     setError("");
     setResult(null);
+    const slowTimer = setTimeout(() => setSlow(true), 4000);
     try {
       const prepared = await prepareImage(file);
       setImage(prepared);
@@ -43,6 +45,9 @@ export default function PhotoDetector() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setStatus("error");
+    } finally {
+      clearTimeout(slowTimer);
+      setSlow(false);
     }
   }
 
@@ -50,7 +55,13 @@ export default function PhotoDetector() {
     <>
       <ImageUploader onSelect={handleSelect} disabled={status === "loading"} />
 
-      {status === "loading" && <p className="status">Detecting objects…</p>}
+      {status === "loading" && (
+        <p className="status">
+          {slow
+            ? "Waking up the model… the first request after a quiet period can take up to ~30 s (serverless cold start)."
+            : "Detecting objects…"}
+        </p>
+      )}
       {status === "error" && <p className="status status--error">{error}</p>}
 
       {image && (
